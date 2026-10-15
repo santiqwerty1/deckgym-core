@@ -5,6 +5,8 @@
 mod checkup_order_test;
 #[path = "rules/damage_order_test.rs"]
 mod damage_order_test;
+#[path = "rules/discard_fossil_once_test.rs"]
+mod discard_fossil_once_test;
 #[path = "rules/evolution_timing_test.rs"]
 mod evolution_timing_test;
 #[path = "rules/special_conditions_test.rs"]
