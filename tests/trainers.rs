@@ -12,6 +12,8 @@ mod cynthia_test;
 mod drayden_test;
 #[path = "trainers/elesa_test.rs"]
 mod elesa_test;
+#[path = "trainers/evolve_chosen_target_test.rs"]
+mod evolve_chosen_target_test;
 #[path = "trainers/energy_move_trainers_test.rs"]
 mod energy_move_trainers_test;
 #[path = "trainers/field_blower_test.rs"]
