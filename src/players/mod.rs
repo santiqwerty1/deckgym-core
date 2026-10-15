@@ -83,9 +83,13 @@ pub fn parse_player_code(s: &str) -> Result<PlayerCode, String> {
         if let Ok(max_depth) = rest.parse::<usize>() {
             return Ok(PlayerCode::E { max_depth });
         }
-        // If it starts with 'e' but not followed by valid number, check if it's 'er'
+        // If it starts with 'e' but not followed by valid number, check the named codes
+        // that start with 'e' ('er', 'et'): otherwise they never reach the match below.
         if lower == "er" {
             return Ok(PlayerCode::ER);
+        }
+        if lower == "et" {
+            return Ok(PlayerCode::ET);
         }
         return Err(format!("Invalid player code: {s}. Use 'e<number>' for ExpectiMiniMax with depth, e.g., 'e2', 'e5'"));
     }
@@ -188,4 +192,32 @@ pub fn create_players_with_bots(
         result.push(player);
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_named_code_parses_to_its_player() {
+        // The `e<number>` branch must not shadow the named codes that start with 'e' ('er', 'et').
+        let named = [
+            ("aa", PlayerCode::AA),
+            ("et", PlayerCode::ET),
+            ("er", PlayerCode::ER),
+            ("r", PlayerCode::R),
+            ("h", PlayerCode::H),
+            ("w", PlayerCode::W),
+            ("m", PlayerCode::M),
+            ("v", PlayerCode::V),
+            ("x", PlayerCode::X),
+        ];
+        for (code, player) in named {
+            assert_eq!(parse_player_code(code), Ok(player.clone()), "{code}");
+            assert_eq!(parse_player_code(&code.to_uppercase()), Ok(player), "{code}");
+        }
+        assert_eq!(parse_player_code("e"), Ok(PlayerCode::E { max_depth: 3 }));
+        assert_eq!(parse_player_code("e2"), Ok(PlayerCode::E { max_depth: 2 }));
+        assert!(parse_player_code("ez").is_err());
+    }
 }
