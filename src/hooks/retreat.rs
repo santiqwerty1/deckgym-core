@@ -24,7 +24,7 @@ pub(crate) fn can_retreat(state: &State) -> bool {
     !state.has_retreated && !has_no_retreat_effect && !is_fossil && !is_immobilized
 }
 
-pub(crate) fn get_retreat_cost(state: &State, card: &PlayedCard) -> Vec<EnergyType> {
+pub fn get_retreat_cost(state: &State, card: &PlayedCard) -> Vec<EnergyType> {
     if let Card::Pokemon(pokemon_card) = &card.card {
         if matches!(
             card.ability_mechanic(),

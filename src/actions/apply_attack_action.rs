@@ -7253,3 +7253,29 @@ mod test {
         }
     }
 }
+
+/// The expected modified damage `attack` (used by `acting_player`'s Active) does to
+/// `target_player`'s Pokémon at `target_idx`, read from the attack's forecast data: no state is
+/// cloned or mutated. For bots' value functions. `acting_player` must have an Active Pokémon.
+pub fn expected_attack_damage(
+    state: &State,
+    acting_player: usize,
+    attack: &Attack,
+    target_player: usize,
+    target_idx: usize,
+) -> f64 {
+    let outcomes = apply_attack_common_modifiers(
+        acting_player,
+        state,
+        attack,
+        forecast_attack_inner(state, attack),
+    );
+    outcomes.expected_damage_to(
+        state,
+        (acting_player, 0),
+        target_player,
+        target_idx,
+        Some(attack.title.as_str()),
+        attack.effect.as_deref(),
+    )
+}
