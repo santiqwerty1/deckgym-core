@@ -29,6 +29,7 @@ pub mod test_support;
 
 pub use deck::Deck;
 pub use game::Game;
+pub use hooks::get_retreat_cost;
 pub use hooks::to_playable_card;
 pub use move_generation::generate_possible_trainer_actions;
 pub use optimize::{
