@@ -5,9 +5,9 @@
 
 use log::trace;
 
-use crate::card_logic::get_highest_evolutions;
+use crate::card_logic::first_highest_evolution;
 use crate::hooks::energy_missing;
-use crate::models::{Card, EnergyType, PlayedCard};
+use crate::models::{EnergyType, PlayedCard};
 use crate::state::GameOutcome;
 use crate::State;
 
@@ -86,8 +86,8 @@ pub fn parametric_value_function(
 ) -> f64 {
     let opponent = (myself + 1) % 2;
     let (my, opp) = (
-        extract_features(state, myself, 1.0),
-        extract_features(state, opponent, 1.0),
+        extract_features(state, myself, 1.0, params),
+        extract_features(state, opponent, 1.0, params),
     );
     let score = (my.points - opp.points) * params.points
         + (my.pokemon_value - opp.pokemon_value) * params.pokemon_value
@@ -127,21 +127,52 @@ struct Features {
     discard_size: f64,
 }
 
-/// Extract features for a single player
-fn extract_features(state: &State, player: usize, active_factor: f64) -> Features {
-    let points = state.points[player] as f64;
-    let pokemon_value = calculate_pokemon_value(state, player, active_factor);
-    let hand_size = state.hands[player].len() as f64;
-    let deck_size = state.decks[player].cards.len() as f64;
-    let active_retreat_cost = get_active_retreat_cost(state, player) as f64;
+/// Extract features for a single player. A feature whose weight in `params` is 0 is not
+/// computed and reads 0: every feature is finite, so its term is a zero either way.
+fn extract_features(
+    state: &State,
+    player: usize,
+    active_factor: f64,
+    params: &ValueFunctionParams,
+) -> Features {
+    let weighted = |weight: f64, feature: &dyn Fn() -> f64| {
+        if weight == 0.0 {
+            0.0
+        } else {
+            feature()
+        }
+    };
+    let points = weighted(params.points, &|| state.points[player] as f64);
+    let pokemon_value = weighted(params.pokemon_value, &|| {
+        calculate_pokemon_value(state, player, active_factor)
+    });
+    let hand_size = weighted(params.hand_size, &|| state.hands[player].len() as f64);
+    let deck_size = weighted(params.deck_size, &|| state.decks[player].cards.len() as f64);
+    let active_retreat_cost = weighted(params.active_retreat_cost, &|| {
+        get_active_retreat_cost(state, player) as f64
+    });
     let (online_pokemon_count, energy_distance_to_online) =
-        calculate_online_metrics(state, player, active_factor);
-    let active_pokemon_online_score = calculate_active_pokemon_online_score(state, player);
-    let active_safety = calculate_active_safety(state, player);
-    let active_has_tool = get_active_has_tool(state, player);
-    let is_winner = check_is_winner(state, player);
-    let turns_until_opponent_wins = calculate_turns_until_opponent_wins(state, player);
-    let discard_size = state.discard_piles[player].len() as f64;
+        if params.online_pokemon_count == 0.0 && params.energy_distance_to_online == 0.0 {
+            (0.0, 0.0)
+        } else {
+            calculate_online_metrics(state, player, active_factor)
+        };
+    let active_pokemon_online_score = weighted(params.active_pokemon_online_score, &|| {
+        calculate_active_pokemon_online_score(state, player)
+    });
+    let active_safety = weighted(params.active_safety, &|| {
+        calculate_active_safety(state, player)
+    });
+    let active_has_tool = weighted(params.active_has_tool, &|| {
+        get_active_has_tool(state, player)
+    });
+    let is_winner = weighted(params.is_winner, &|| check_is_winner(state, player));
+    let turns_until_opponent_wins = weighted(params.turns_until_opponent_wins, &|| {
+        calculate_turns_until_opponent_wins(state, player)
+    });
+    let discard_size = weighted(params.opponent_discard_size, &|| {
+        state.discard_piles[player].len() as f64
+    });
 
     Features {
         points,
@@ -336,20 +367,14 @@ fn calculate_active_pokemon_online_score(state: &State, player: usize) -> f64 {
         return 0.0;
     };
 
-    // Get all cards available in deck + hand
-    let mut available_cards: Vec<Card> = state.decks[player].cards.to_vec();
-    available_cards.extend(state.hands[player].iter().cloned());
-
-    // Find the highest evolution available
-    let highest_evolutions = get_highest_evolutions(&active_pokemon.card, &available_cards);
-
-    // If no evolutions found, use the current card
-    let target_card = if highest_evolutions.is_empty() {
-        &active_pokemon.card
-    } else {
-        // Use the first highest evolution (they should all be same stage)
-        &highest_evolutions[0]
-    };
+    // Find the highest evolution available in deck + hand (the first one: they should all be
+    // same stage), or use the current card if there is none
+    let target_card = first_highest_evolution(
+        &active_pokemon.card,
+        &state.decks[player].cards,
+        &state.hands[player],
+    )
+    .unwrap_or(&active_pokemon.card);
 
     // Get the highest attack energy cost from the target card
     let most_expensive_attack_cost: Vec<EnergyType> = target_card
