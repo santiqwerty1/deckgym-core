@@ -185,6 +185,40 @@ pub fn get_highest_evolutions(card: &Card, available_cards: &[Card]) -> Vec<Card
     highest_evolutions
 }
 
+/// The first card `get_highest_evolutions` returns when `available_cards` is `deck` followed by
+/// `hand`, found without copying them or cloning any card.
+pub fn first_highest_evolution<'a>(
+    card: &'a Card,
+    deck: &'a [Card],
+    hand: &'a [Card],
+) -> Option<&'a Card> {
+    let Card::Pokemon(pokemon) = card else {
+        return None;
+    };
+    let first_of = |stage: u8, names: &[String]| {
+        deck.iter().chain(hand).find(|available| {
+            matches!(available, Card::Pokemon(p) if p.stage == stage && names.contains(&p.name))
+        })
+    };
+
+    match pokemon.stage {
+        0 => {
+            let stage1_names = STAGE1_LOOKUP.get(&pokemon.name)?;
+            stage1_names
+                .iter()
+                .filter_map(|stage1_name| STAGE2_LOOKUP.get(stage1_name))
+                .find_map(|stage2_names| first_of(2, stage2_names))
+                .or_else(|| first_of(1, stage1_names))
+        }
+        1 => STAGE2_LOOKUP
+            .get(&pokemon.name)
+            .and_then(|stage2_names| first_of(2, stage2_names))
+            .or(Some(card)),
+        2 => Some(card),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -283,6 +317,36 @@ mod tests {
             assert_eq!(p.name, "Venusaur");
         } else {
             panic!("Expected Pokemon card");
+        }
+    }
+
+    #[test]
+    fn test_first_highest_evolution_is_the_first_of_get_highest_evolutions() {
+        let all: Vec<Card> = CardId::iter().map(get_card_by_enum).collect();
+        let is_stage =
+            |card: &Card, stage: u8| matches!(card, Card::Pokemon(p) if p.stage == stage);
+        let without_stage2: Vec<Card> = all.iter().filter(|c| !is_stage(c, 2)).cloned().collect();
+        let stage2: Vec<Card> = all.iter().filter(|c| is_stage(c, 2)).cloned().collect();
+        let reversed: Vec<Card> = all.iter().rev().cloned().collect();
+        // (deck, hand): everything, no Stage 2 at all, the Stage 2 only in the hand, the other order, nothing.
+        let splits: [(&[Card], &[Card]); 5] = [
+            (&all[..all.len() / 2], &all[all.len() / 2..]),
+            (&without_stage2, &[]),
+            (&without_stage2, &stage2),
+            (&reversed, &[]),
+            (&[], &[]),
+        ];
+        let id = |card: Option<&Card>| card.map(|c| c.get_id());
+        for (deck, hand) in splits {
+            let available: Vec<Card> = deck.iter().chain(hand).cloned().collect();
+            for card in all.iter().filter(|c| matches!(c, Card::Pokemon(_))) {
+                assert_eq!(
+                    id(first_highest_evolution(card, deck, hand)),
+                    id(get_highest_evolutions(card, &available).first()),
+                    "{}",
+                    card.get_id()
+                );
+            }
         }
     }
 }
