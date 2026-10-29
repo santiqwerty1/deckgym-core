@@ -29,7 +29,7 @@ pub(crate) fn can_retreat(state: &State) -> bool {
 /// defender's owner. Modifiers that name the Active Pokémon (Sky Support, Trap Territory, the typed
 /// Bench discounts, the Active auras) apply only when `is_active`, and one-turn effects (X Speed)
 /// only to the current player.
-pub(crate) fn get_retreat_cost(
+pub fn get_retreat_cost(
     state: &State,
     player: usize,
     card: &PlayedCard,
